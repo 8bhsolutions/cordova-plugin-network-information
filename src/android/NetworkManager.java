@@ -137,63 +137,65 @@ public class NetworkManager extends CordovaPlugin {
         this.unregisterReceiver();
     }
 
-    @Override
-    public void onPause(boolean multitasking) {
-        this.unregisterReceiver();
-    }
+    // @Override
+    // public void onPause(boolean multitasking) {
+    //     this.unregisterReceiver();
+    // }
 
-    @Override
-    public void onResume(boolean multitasking) {
-        super.onResume(multitasking);
+    // @Override
+    // public void onResume(boolean multitasking) {
+    //     super.onResume(multitasking);
 
-        this.unregisterReceiver();
-        this.registerConnectivityActionReceiver();
-    }
+    //     this.unregisterReceiver();
+    //     this.registerConnectivityActionReceiver();
+    // }
 
     //--------------------------------------------------------------------------
     // LOCAL METHODS
     //--------------------------------------------------------------------------
 
     private void registerConnectivityActionReceiver() {
+        if (this.receiver != null) {
+            return;
+        }
+        
+        this.receiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                // (The null check is for the ARM Emulator, please use Intel Emulator for better results)
+                if (NetworkManager.this.webView != null) {
+                    updateConnectionInfo(sockMan.getActiveNetworkInfo());
+                }
+
+                String connectionType = null;
+                if(NetworkManager.this.lastInfo == null) {
+                    connectionType = TYPE_NONE;
+                } else {
+                    try {
+                        connectionType = NetworkManager.this.lastInfo.get("type").toString();
+                    } catch (JSONException e) {
+                        LOG.d(LOG_TAG, e.getLocalizedMessage());
+                        connectionType = TYPE_NONE;
+                    }
+                }
+
+                // Lollipop always returns false for the EXTRA_NO_CONNECTIVITY flag => fix for Android M and above.
+                if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && TYPE_NONE.equals(connectionType)) {
+                    boolean noConnectivity = intent.getBooleanExtra(ConnectivityManager.EXTRA_NO_CONNECTIVITY, false);
+                    LOG.d(LOG_TAG, "Intent no connectivity: " + noConnectivity);
+                    if(noConnectivity) {
+                        LOG.d(LOG_TAG, "Really no connectivity");
+                    } else {
+                        LOG.d(LOG_TAG, "!!! Switching to unknown, Intent states there is a connectivity.");
+                        sendUpdate(TYPE_UNKNOWN);
+                    }
+                }
+            }
+        };
+
         // We need to listen to connectivity events to update navigator.connection
         IntentFilter intentFilter = new IntentFilter();
         intentFilter.addAction(ConnectivityManager.CONNECTIVITY_ACTION);
-        if (this.receiver == null) {
-            this.receiver = new BroadcastReceiver() {
-                @Override
-                public void onReceive(Context context, Intent intent) {
-                    // (The null check is for the ARM Emulator, please use Intel Emulator for better results)
-                    if (NetworkManager.this.webView != null) {
-                        updateConnectionInfo(sockMan.getActiveNetworkInfo());
-                    }
-
-                    String connectionType = null;
-                    if(NetworkManager.this.lastInfo == null) {
-                        connectionType = TYPE_NONE;
-                    } else {
-                        try {
-                            connectionType = NetworkManager.this.lastInfo.get("type").toString();
-                        } catch (JSONException e) {
-                            LOG.d(LOG_TAG, e.getLocalizedMessage());
-                            connectionType = TYPE_NONE;
-                        }
-                    }
-
-                    // Lollipop always returns false for the EXTRA_NO_CONNECTIVITY flag => fix for Android M and above.
-                    if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && TYPE_NONE.equals(connectionType)) {
-                        boolean noConnectivity = intent.getBooleanExtra(ConnectivityManager.EXTRA_NO_CONNECTIVITY, false);
-                        LOG.d(LOG_TAG, "Intent no connectivity: " + noConnectivity);
-                        if(noConnectivity) {
-                            LOG.d(LOG_TAG, "Really no connectivity");
-                        } else {
-                            LOG.d(LOG_TAG, "!!! Switching to unknown, Intent states there is a connectivity.");
-                            sendUpdate(TYPE_UNKNOWN);
-                        }
-                    }
-                }
-            };
-        }
-
         webView.getContext().registerReceiver(this.receiver, intentFilter);
     }
 
